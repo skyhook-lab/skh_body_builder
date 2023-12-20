@@ -153,6 +153,7 @@ class BodyBuilderState<T> extends State<BodyBuilder<T>> {
       _loadCache();
       return;
     }
+    if (!mounted) return;
     setState(() {
       _error = null;
       _errorStack = null;
@@ -168,8 +169,7 @@ class BodyBuilderState<T> extends State<BodyBuilder<T>> {
 
   Future<void> _loadCache() async {
     if (widget.cacheProvider == null) {
-      _loadData();
-      return;
+      return _loadData();
     }
     _subscription?.cancel();
     _subscription = widget.cacheProvider!().asStream().listen(
@@ -183,16 +183,9 @@ class BodyBuilderState<T> extends State<BodyBuilder<T>> {
         });
         _loadData();
       },
-      onError: (e, s) {
-        if (!mounted) return;
-        debugPrint('$e $s');
-        setState(() {
-          _error = e;
-          _errorStack = s;
-          _isLoading = false;
-        });
-      },
+      onError: _onDataProviderError,
     );
+    return _subscription?.asFuture();
   }
 
   Future<void> fetch({
@@ -213,6 +206,7 @@ class BodyBuilderState<T> extends State<BodyBuilder<T>> {
     // values of the body builder providers.
     // We want to wait for the next frame to be sure to be up to date with
     // an eventual setState
+    final Completer completer = Completer();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         setState(() {
@@ -225,14 +219,21 @@ class BodyBuilderState<T> extends State<BodyBuilder<T>> {
           }
         });
         if (allowState) {
-          _loadState();
+          _loadState()
+              .then(completer.complete)
+              .catchError(completer.completeError);
         } else if (allowCache) {
-          _loadCache();
+          _loadCache()
+              .then(completer.complete)
+              .catchError(completer.completeError);
         } else {
-          _loadData();
+          _loadData()
+              .then(completer.complete)
+              .catchError(completer.completeError);
         }
       }
     });
+    return completer.future;
   }
 
   Future<void> retry() async {
@@ -264,17 +265,20 @@ class BodyBuilderState<T> extends State<BodyBuilder<T>> {
           _data = data;
         });
       },
-      onError: (e, s) {
-        if (!mounted) return;
-        debugPrint('$e $s');
-        setState(() {
-          _error = e;
-          _errorStack = s;
-          _isLoading = false;
-        });
-      },
+      onError: _onDataProviderError,
     );
+    return _subscription?.asFuture();
   }
+
+  _onDataProviderError(e, s) {
+      if (!mounted) return;
+      debugPrint('$e $s');
+      setState(() {
+        _error = e;
+        _errorStack = s;
+        _isLoading = false;
+      });
+    }
 
   @override
   void dispose() {

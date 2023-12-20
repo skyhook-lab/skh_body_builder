@@ -6,7 +6,7 @@ typedef StateConvertor<T, C extends ChangeNotifier> = T? Function(
 );
 
 class CustomStateProvider<T, C extends ChangeNotifier>
-    extends StateProvider<T> {
+    extends SearchableStateProvider<T> {
   final C changeNotifier;
   final StateConvertor<T, C> convertor;
 
@@ -21,13 +21,16 @@ class CustomStateProvider<T, C extends ChangeNotifier>
       changeNotifier.removeListener(listener);
 
   @override
-  T? items() => convertor(changeNotifier);
+  T? items([String? query]) => convertor(changeNotifier);
 
   @override
-  bool hasData() => convertor(changeNotifier) != null;
+  bool hasData([String? query]) => convertor(changeNotifier) != null;
+
+  @override
+  bool hasMore([String? query]) => false;
 }
 
 extension ChangeNotifierExt<C extends ChangeNotifier> on C {
-  StateProvider<T> map<T>(StateConvertor<T, C> state) =>
+  SearchableStateProvider<T> map<T>(StateConvertor<T, C> state) =>
       CustomStateProvider<T, C>(changeNotifier: this, convertor: state);
 }
